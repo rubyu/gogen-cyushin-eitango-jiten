@@ -2,3 +2,10 @@
 /target/
 /.idea/
 /.idea_modules/
+/lib/imageio-ext-tiff-1.1.7.jar
+/lib/imageio-ext-utilities-1.1.7.jar
+/lib/jai_codec-1.1.3.jar
+/lib/jai_core-1.1.3.jar
+/lib/jai_imageio-1.1.1.jar
+/lib/opencv-windows-x86_64.jar
+*.tif
