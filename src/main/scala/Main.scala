@@ -47,7 +47,7 @@ object Main {
         val ow = m0.arrayWidth()
         val oh = m0.arrayHeight()
         val m1, m2, m3, m4, m5 = new Mat()
-        //up-sampling to 32bit
+        // up-sampling 8bit integer to 32bit floating-point
         m0.convertTo(m1, CV_32F, 1.0 / 255, 0)
         // convert color to gray-scale
         cvtColor(m1, m2, CV_BGR2GRAY)
@@ -96,6 +96,7 @@ object Main {
         line(m0, new Point(0, h_border), new Point(ow, h_border), BLACK, 2, CV_AA, 0)
 
         if (fpx > h_border) {
+          // Type A; The pages start with "第～篇 (The n-th Chapter)".
           putText(m0, "Type: A", new Point(0, 50), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
 
           putText(m0, "first_px+margin", new Point(0, fpx-margin+10), FONT_HERSHEY_TRIPLEX, 2.0, RED, 2, CV_AA, false)
@@ -111,6 +112,7 @@ object Main {
           putText(m0, "last_px(adjusted)", new Point(0, lpx2+margin+10), FONT_HERSHEY_TRIPLEX, 2.0, GREEN, 2, CV_AA, false)
           line(m0, new Point(0, lpx2+margin), new Point(ow, lpx2+margin), GREEN, 2, CV_AA, 0)
         } else {
+          // Type B; Normal pages.
           putText(m0, "Type: B", new Point(0, 50), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
 
           //再びスキャンを行い、先端を見つける
