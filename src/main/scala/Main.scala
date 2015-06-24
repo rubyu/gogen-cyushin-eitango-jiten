@@ -31,6 +31,7 @@ object Main {
     println("")
 
     val source_dir = "Z:\\BTSync\\rubyu\\code\\english etymology\\!変換データ"
+//    val source_dir = "data"
     new File(source_dir).listFiles.map {
       case f if f.isDirectory => {}
       case file => {
@@ -46,7 +47,9 @@ object Main {
 
         val ow = m0.arrayWidth()
         val oh = m0.arrayHeight()
-        val m1, m2, m3, m4, m5 = new Mat()
+        val m1, m2, m3, m4, m5, m6, m7, result = new Mat()
+
+        m0.copyTo(result)
         // up-sampling 8bit integer to 32bit floating-point
         m0.convertTo(m1, CV_32F, 1.0 / 255, 0)
         // convert color to gray-scale
@@ -56,8 +59,9 @@ object Main {
         // calculate average value of rows
         reduce(m3, m4, 1, CV_REDUCE_AVG)
         // binarize
-        threshold(m4, m5, 0.995, 1.0, CV_THRESH_BINARY)
-        println("m5: " + m5)
+        // ちょいセンシティブ。例えば0.995だとp108の先頭の…(縦)が無視される。
+        // ダメそうならパラメータ化して、ページごとに設定するなどする。
+        threshold(m4, m5, 0.997, 1.0, CV_THRESH_BINARY)
 
         //    namedWindow("m5")
         //    imshow("m5", m5)
@@ -88,49 +92,101 @@ object Main {
         val BLUE = new Scalar(255, 0, 0, 0)
         val GREEN = new Scalar(0, 255, 0, 0)
         val RED = new Scalar(0, 0, 255, 0)
+        val YELLOW = new Scalar(0, 255, 255, 0)
 
-        putText(m0, "first_px",new Point(0, fpx+10), FONT_HERSHEY_TRIPLEX, 2.0, BLUE, 2, CV_AA, false)
-        line(m0, new Point(0, fpx), new Point(ow, fpx), BLUE, 2, CV_AA, 0)
+        putText(result, "first_px",new Point(0, fpx+10), FONT_HERSHEY_TRIPLEX, 2.0, BLUE, 2, CV_AA, false)
+        line(result, new Point(0, fpx), new Point(ow, fpx), BLUE, 2, CV_AA, 0)
 
-        putText(m0, "h_border", new Point(0, h_border+10), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
-        line(m0, new Point(0, h_border), new Point(ow, h_border), BLACK, 2, CV_AA, 0)
+        putText(result, "h_border", new Point(0, h_border+10), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
+        line(result, new Point(0, h_border), new Point(ow, h_border), BLACK, 2, CV_AA, 0)
 
         if (fpx > h_border) {
           // Type A; The pages start with "第～篇 (The n-th Chapter)".
-          putText(m0, "Type: A", new Point(0, 50), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
+          putText(result, "Type: A", new Point(0, 50), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
 
-          putText(m0, "first_px+margin", new Point(0, fpx-margin+10), FONT_HERSHEY_TRIPLEX, 2.0, RED, 2, CV_AA, false)
-          line(m0, new Point(0, fpx-margin), new Point(ow, fpx-margin), RED, 2, CV_AA, 0)
+          putText(result, "first_px+margin", new Point(0, fpx-margin+10), FONT_HERSHEY_TRIPLEX, 2.0, RED, 2, CV_AA, false)
+          line(result, new Point(0, fpx-margin), new Point(ow, fpx-margin), RED, 2, CV_AA, 0)
 
-          putText(m0, "last_px", new Point(0, lpx+10), FONT_HERSHEY_TRIPLEX, 2.0, BLUE, 2, CV_AA, false)
-          line(m0, new Point(0, lpx), new Point(ow, lpx), BLUE, 2, CV_AA, 0)
+          putText(result, "last_px", new Point(0, lpx+10), FONT_HERSHEY_TRIPLEX, 2.0, BLUE, 2, CV_AA, false)
+          line(result, new Point(0, lpx), new Point(ow, lpx), BLUE, 2, CV_AA, 0)
 
           //再びスキャンを行い、末尾を見つける
           val last_px2 = find_px(m5_buf, lpx-75 to 0 by -1, _ < 1.0)
           val lpx2 = last_px2.get
 
-          putText(m0, "last_px(adjusted)", new Point(0, lpx2+margin+10), FONT_HERSHEY_TRIPLEX, 2.0, GREEN, 2, CV_AA, false)
-          line(m0, new Point(0, lpx2+margin), new Point(ow, lpx2+margin), GREEN, 2, CV_AA, 0)
+          putText(result, "last_px(adjusted)", new Point(0, lpx2+margin+10), FONT_HERSHEY_TRIPLEX, 2.0, GREEN, 2, CV_AA, false)
+          line(result, new Point(0, lpx2+margin), new Point(ow, lpx2+margin), GREEN, 2, CV_AA, 0)
         } else {
           // Type B; Normal pages.
-          putText(m0, "Type: B", new Point(0, 50), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
+          putText(result, "Type: B", new Point(0, 50), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
 
           //再びスキャンを行い、先端を見つける
           val first_px2 = find_px(m5_buf, fpx+80 until oh, _ < 1.0)
           val fpx2 = first_px2.get
 
-          putText(m0, "first_px(adjusted)", new Point(0, fpx2-margin+10), FONT_HERSHEY_TRIPLEX, 2.0, GREEN, 2, CV_AA, false)
-          line(m0, new Point(0, fpx2-margin), new Point(ow, fpx2-margin), GREEN, 2, CV_AA, 0)
+          putText(result, "first_px(adjusted)", new Point(0, fpx2-margin+10), FONT_HERSHEY_TRIPLEX, 2.0, GREEN, 2, CV_AA, false)
+          line(result, new Point(0, fpx2-margin), new Point(ow, fpx2-margin), GREEN, 2, CV_AA, 0)
 
-          putText(m0, "last_px", new Point(0, lpx+10), FONT_HERSHEY_TRIPLEX, 2.0, BLUE, 2, CV_AA, false)
-          line(m0, new Point(0, lpx), new Point(ow, lpx), BLUE, 2, CV_AA, 0)
+          putText(result, "last_px", new Point(0, lpx+10), FONT_HERSHEY_TRIPLEX, 2.0, BLUE, 2, CV_AA, false)
+          line(result, new Point(0, lpx), new Point(ow, lpx), BLUE, 2, CV_AA, 0)
 
-          putText(m0, "last_px+margin", new Point(0, lpx+margin+10), FONT_HERSHEY_TRIPLEX, 2.0, RED, 2, CV_AA, false)
-          line(m0, new Point(0, lpx+margin), new Point(ow, lpx+margin), RED, 2, CV_AA, 0)
+          putText(result, "last_px+margin", new Point(0, lpx+margin+10), FONT_HERSHEY_TRIPLEX, 2.0, RED, 2, CV_AA, false)
+          line(result, new Point(0, lpx+margin), new Point(ow, lpx+margin), RED, 2, CV_AA, 0)
         }
 
+        val i0 = m0.asIplImage()
+        val i1, i2 = cvCreateImage(cvGetSize(i0), IPL_DEPTH_8U, 1)
+        val storage = cvCreateMemStorage(0)
+        cvCvtColor(i0, i1, CV_BGR2GRAY)
+        cvSmooth(i1, i2, CV_GAUSSIAN, 9, 9, 0, 0)
+        cvCopy(i2, i1)
+        cvThreshold(i1, i2, 250, 255, CV_THRESH_BINARY_INV)
+        val lines = cvHoughLines2(i2, storage, CV_HOUGH_PROBABILISTIC, 0.05, CV_PI / 180, 1, 350, 3)
+
+        for (i <- 0 until lines.total) {
+          val segment = cvGetSeqElem(lines, i)
+          val p0 = new CvPoint(segment).position(0)
+          val p1 = new CvPoint(segment).position(1)
+
+          line(result, new Point(p0.x, p0.y), new Point(p1.x, p1.y), RED, 2, CV_AA, 0)
+        }
+
+        /*
+        val contours = new MatVector()
+        val hierarchy = new Mat()
+        val curve = new Mat()
+
+        cvtColor(m0, m6, CV_BGR2GRAY)
+        threshold(m6, m7, 235, 255, CV_THRESH_BINARY_INV)
+        println("m7:", m7)
+        findContours(m7, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE, new Point())
+        println("contours:", contours)
+        println("hierarchy:", hierarchy)
+        //drawContours(result, contours, -1, RED, 4, CV_AA, hierarchy, 2, new Point())
+
+        for (i <- 0L until contours.size()) {
+          approxPolyDP(contours.get(i), curve, 10.0, true)
+          println("curve:", curve)
+          println("total:", curve.total())
+          println("contourArea:", contourArea(curve))
+          println("isisContourConvex:", isContourConvex(curve))
+          if (curve.total() == 4) {
+          //if (curve.total() == 4 && isContourConvex(curve)) {
+            if (1000 < contourArea(curve)) {
+              val rect = boundingRect(contours.get(i))
+              rectangle(result, rect, RED)
+            }
+            //polylines(result, curve, true, RED)
+          }
+        }
+
+//        namedWindow("hierarchy")
+//        imshow("hierarchy", hierarchy)
+//        waitKey()
+        */
+
         val preview = new Mat()
-        resize(m0, preview, new Size(), 0.25, 0.25, INTER_LINEAR)
+        resize(result, preview, new Size(), 0.25, 0.25, INTER_LINEAR)
         println("preview: " + preview)
 
         namedWindow("Preview")
