@@ -9,6 +9,8 @@ import org.bytedeco.javacpp.opencv_imgproc._
 import org.bytedeco.javacpp.opencv_highgui._
 import org.bytedeco.javacpp.opencv_objdetect._
 
+import scala.collection.mutable
+
 object Main {
 
   val converter1 = new OpenCVFrameConverter.ToMat()
@@ -30,8 +32,8 @@ object Main {
     println("W:", ImageIO.getWriterFormatNames().mkString(", "))
     println("")
 
-    val source_dir = "Z:\\BTSync\\rubyu\\code\\english etymology\\!変換データ"
-//    val source_dir = "data"
+//    val source_dir = "Z:\\BTSync\\rubyu\\code\\english etymology\\!変換データ"
+    val source_dir = "data"
     new File(source_dir).listFiles.map {
       case f if f.isDirectory => {}
       case file => {
@@ -141,49 +143,56 @@ object Main {
         cvSmooth(i1, i2, CV_GAUSSIAN, 9, 9, 0, 0)
         cvCopy(i2, i1)
         cvThreshold(i1, i2, 250, 255, CV_THRESH_BINARY_INV)
-        val lines = cvHoughLines2(i2, storage, CV_HOUGH_PROBABILISTIC, 0.05, CV_PI / 180, 1, 350, 3)
+        val lines = cvHoughLines2(i2, storage, CV_HOUGH_PROBABILISTIC, 0.025, CV_PI / 180, 1, 200, 4)
 
-        for (i <- 0 until lines.total) {
+        val segments = (for (i <- 0 until lines.total) yield {
           val segment = cvGetSeqElem(lines, i)
-          val p0 = new CvPoint(segment).position(0)
-          val p1 = new CvPoint(segment).position(1)
+          (new CvPoint(segment).position(0), new CvPoint(segment).position(1))
+        }).sortWith((p0, p1) => Math.min(p0._1.y, p0._2.y) < Math.min(p1._1.y, p1._2.y))
 
+        val min_item_height = 300
+        val item_split_margin = 20
+        val items = new mutable.MutableList[Int]
+
+        for ((p0, p1) <- segments) {
           line(result, new Point(p0.x, p0.y), new Point(p1.x, p1.y), RED, 2, CV_AA, 0)
-        }
 
-        /*
-        val contours = new MatVector()
-        val hierarchy = new Mat()
-        val curve = new Mat()
+          val x_margin = 5
+          val top_height = 50
+          val top_margin = 5
+          val bottom_height = 15
+          val bottom_margin = 5
+          val x = Math.min(p0.x, p1.x) + x_margin
+          val width = Math.abs(p0.x - p1.x) - x_margin * 2
+          val y = Math.min(p0.y, p1.y)
+          val top_y = y - top_height - top_margin
+          val bottom_y = y + bottom_margin
 
-        cvtColor(m0, m6, CV_BGR2GRAY)
-        threshold(m6, m7, 235, 255, CV_THRESH_BINARY_INV)
-        println("m7:", m7)
-        findContours(m7, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE, new Point())
-        println("contours:", contours)
-        println("hierarchy:", hierarchy)
-        //drawContours(result, contours, -1, RED, 4, CV_AA, hierarchy, 2, new Point())
+          if (x >= 0 && top_y >= 0 && width > 0 && bottom_y + bottom_height < oh) {
+            val v0 = cvCreateImage(cvSize(width, 1), IPL_DEPTH_32F, 1)
+            val v1 = cvCreateImage(cvSize(1, 1), IPL_DEPTH_32F, 1)
 
-        for (i <- 0L until contours.size()) {
-          approxPolyDP(contours.get(i), curve, 10.0, true)
-          println("curve:", curve)
-          println("total:", curve.total())
-          println("contourArea:", contourArea(curve))
-          println("isisContourConvex:", isContourConvex(curve))
-          if (curve.total() == 4) {
-          //if (curve.total() == 4 && isContourConvex(curve)) {
-            if (1000 < contourArea(curve)) {
-              val rect = boundingRect(contours.get(i))
-              rectangle(result, rect, RED)
+            cvSetImageROI(i2, cvRect(x, top_y, width, top_height))
+            cvReduce(i2, v0, 0, CV_REDUCE_AVG)
+            cvReduce(v0, v1, 1, CV_REDUCE_AVG)
+            val avg1 = v1.createBuffer[FloatBuffer]().get(0)
+            cvResetImageROI(i2)
+            cvSetImageROI(i2, cvRect(x, bottom_y, width, bottom_height))
+            cvReduce(i2, v0, 0, CV_REDUCE_AVG)
+            cvReduce(v0, v1, 1, CV_REDUCE_AVG)
+            val avg = (avg1 + v1.createBuffer[FloatBuffer]().get(0)) / 512
+            println("p0:", p0, "p1:", p1, "avg:", avg)
+            if (avg < 0.15) {
+              if (items.isEmpty || y - items.last > min_item_height) {
+                items += y
+                line(result, new Point(0, y-item_split_margin), new Point(ow, y-item_split_margin), BLUE, 2, CV_AA, 0)
+              }
+              rectangle(result, new Rect(x, top_y, width, top_height), BLUE, 1, CV_AA, 0)
+              rectangle(result, new Rect(x, bottom_y, width, bottom_height), GREEN, 1, CV_AA, 0)
             }
-            //polylines(result, curve, true, RED)
           }
+          cvResetImageROI(i2)
         }
-
-//        namedWindow("hierarchy")
-//        imshow("hierarchy", hierarchy)
-//        waitKey()
-        */
 
         val preview = new Mat()
         resize(result, preview, new Size(), 0.25, 0.25, INTER_LINEAR)
