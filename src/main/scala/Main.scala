@@ -13,16 +13,120 @@ import scala.collection.mutable
 
 object Main {
 
+  trait PageType
+  object PageTypeA extends PageType
+  object PageTypeB extends PageType
+
+  val BLACK = cvScalar(0, 0, 0, 0)
+  val BLUE = cvScalar(255, 0, 0, 0)
+  val GREEN = cvScalar(0, 255, 0, 0)
+  val RED = cvScalar(0, 0, 255, 0)
+  val YELLOW = cvScalar(0, 255, 255, 0)
+
+  val FONT = cvFont(2, 2)
+  cvInitFont(FONT, CV_FONT_HERSHEY_TRIPLEX, 2, 2, 1, 2, CV_AA)
+
   val converter1 = new OpenCVFrameConverter.ToMat()
   val converter2 = new OpenCVFrameConverter.ToIplImage()
   val converter3 = new Java2DFrameConverter()
 
-  def bufferedImageToMat(img: BufferedImage): Mat = {
-    converter1.convert(converter3.convert(img))
-  }
+  def bufferedImageToMat(img: BufferedImage): Mat = converter1.convert(converter3.convert(img))
+  def bufferedImageToIplImage(img: BufferedImage): IplImage = converter2.convert(converter3.convert(img))
 
-  def bufferedImageToIplImage(img: BufferedImage): IplImage = {
-    converter2.convert(converter3.convert(img))
+  // PageTypeがAであるかBであるかを決定する境界値
+  val header_border = 450
+  // ページを切断する際のマージン値
+  val page_cut_margin = 15
+
+  def scan_page(i0: IplImage, result: IplImage): (PageType, Int, Int) = {
+    println("i0:", i0)
+
+    val page_size = cvGetSize(i0)
+    val i1 = cvCreateImage(page_size, IPL_DEPTH_32F, 3)
+    val i2 = cvCreateImage(page_size, IPL_DEPTH_32F, 1)
+    val i3 = cvCreateImage(page_size, IPL_DEPTH_8U, 1)
+    val i4 = cvCreateImage(cvSize(1, page_size.height), IPL_DEPTH_32F, 1)
+    val i5 = cvCreateImage(cvSize(1, page_size.height), IPL_DEPTH_32F, 1)
+
+    // up-sampling 8bit integer to 32bit floating-point
+    cvConvertScale(i0, i1, 1.0 / 255, 0)
+    // convert color to gray-scale
+    cvCvtColor(i1, i2, CV_BGR2GRAY)
+    // binarize
+    cvThreshold(i2, i3, 0.9, 1.0, CV_THRESH_BINARY)
+    // calculate average value of rows
+    cvReduce(i3, i4, 1, CV_REDUCE_AVG)
+    // binarize
+    // ちょいセンシティブ。例えば0.995だとp108の先頭の…(縦)が無視される。
+    // ダメそうならパラメータ化して、ページごとに設定するなどする。
+    cvThreshold(i4, i5, 0.997, 1.0, CV_THRESH_BINARY)
+
+    //    namedWindow("m5")
+    //    imshow("m5", m5)
+    //    waitKey()
+
+    class PixelFinder(buf: FloatBuffer) {
+      def find(r : collection.immutable.Range, f: Float => Boolean): Option[Int] = {
+        for (i <- r) {
+          if (f(buf get i)) {
+            return Some(i)
+          }
+        }
+        None
+      }
+    }
+    val finder = new PixelFinder(i5.createBuffer[FloatBuffer]())
+
+    val fpx = finder.find(0 until page_size.height, _ < 1.0).get
+    println("fpx:", fpx)
+    val lpx = finder.find(page_size.height-1 to 0 by -1, _ < 1.0).get
+    println("lpx:", lpx)
+
+    cvPutText(result, "first_px", cvPoint(0, fpx+10), FONT, BLUE)
+    cvLine(result, cvPoint(0, fpx), cvPoint(page_size.width, fpx), BLUE, 2, CV_AA, 0)
+
+    cvPutText(result, "header_border", cvPoint(0, header_border+10), FONT, BLACK)
+    cvLine(result, cvPoint(0, header_border), cvPoint(page_size.width, header_border), BLACK, 2, CV_AA, 0)
+
+    if (fpx > header_border) {
+      // Type A; The pages start with "第～篇 (The n-th Chapter)".
+      cvPutText(result, "Type: A", cvPoint(0, 50), FONT, BLACK)
+
+      val fpx2 = fpx - page_cut_margin
+      //再びスキャンを行い、末尾を見つける
+      val lpx2 = finder.find(lpx-75 to 0 by -1, _ < 1.0).get
+      val lpx2_adjusted = lpx2 + page_cut_margin
+
+      cvPutText(result, "first_px+margin", cvPoint(0, fpx2+10), FONT, RED)
+      cvLine(result, cvPoint(0, fpx2), cvPoint(page_size.width, fpx2), RED, 2, CV_AA, 0)
+
+      cvPutText(result, "last_px", cvPoint(0, lpx+10), FONT, BLUE)
+      cvLine(result, cvPoint(0, lpx), cvPoint(page_size.width, lpx), BLUE, 2, CV_AA, 0)
+
+      cvPutText(result, "last_px(adjusted)", cvPoint(0, lpx2_adjusted+10), FONT, GREEN)
+      cvLine(result, cvPoint(0, lpx2_adjusted), cvPoint(page_size.width, lpx2_adjusted), GREEN, 2, CV_AA, 0)
+
+      (PageTypeA, fpx2, lpx2_adjusted)
+    } else {
+      // Type B; Normal pages.
+      cvPutText(result, "Type: B", cvPoint(0, 50), FONT, BLACK)
+
+      //再びスキャンを行い、先端を見つける
+      val fpx2 = finder.find(fpx+80 until page_size.height, _ < 1.0).get
+      val fpx2_adjusted = fpx2 - page_cut_margin
+      val lpx2 = lpx + page_cut_margin
+
+      cvPutText(result, "first_px(adjusted)", cvPoint(0, fpx2_adjusted+10), FONT, GREEN)
+      cvLine(result, cvPoint(0, fpx2_adjusted), cvPoint(page_size.width, fpx2_adjusted), GREEN, 2, CV_AA, 0)
+
+      cvPutText(result, "last_px", cvPoint(0, lpx+10), FONT, BLUE)
+      cvLine(result, cvPoint(0, lpx), cvPoint(page_size.width, lpx), BLUE, 2, CV_AA, 0)
+
+      cvPutText(result, "last_px+margin", cvPoint(0, lpx2+10), FONT, RED)
+      cvLine(result, cvPoint(0, lpx2), cvPoint(page_size.width, lpx2), RED, 2, CV_AA, 0)
+
+      (PageTypeB, fpx2_adjusted, lpx2)
+    }
   }
 
   def main(args: Array[String]) {
@@ -37,106 +141,21 @@ object Main {
     new File(source_dir).listFiles.map {
       case f if f.isDirectory => {}
       case file => {
+        println("-" * 20)
         println(file.getName)
         val image = ImageIO.read(file)
-        if (image != null) {
-          println("Width:", image.getWidth)
-          println("Height:", image.getHeight)
-          println("ColorModel:", image.getColorModel)
-        }
-        val m0 = bufferedImageToMat(image)
-        println("original:", m0)
+        println("Width:", image.getWidth)
+        println("Height:", image.getHeight)
+        println("ColorModel:", image.getColorModel)
 
-        val ow = m0.arrayWidth()
-        val oh = m0.arrayHeight()
-        val m1, m2, m3, m4, m5, m6, m7, result = new Mat()
+        val i0 = bufferedImageToIplImage(image)
+        println("i0:", i0)
+        val page_size = cvGetSize(i0)
+        val result = cvCreateImage(page_size, IPL_DEPTH_8U, 3)
+        cvCopy(i0, result)
 
-        m0.copyTo(result)
-        // up-sampling 8bit integer to 32bit floating-point
-        m0.convertTo(m1, CV_32F, 1.0 / 255, 0)
-        // convert color to gray-scale
-        cvtColor(m1, m2, CV_BGR2GRAY)
-        // binarize
-        threshold(m2, m3, 0.9, 1.0, CV_THRESH_BINARY)
-        // calculate average value of rows
-        reduce(m3, m4, 1, CV_REDUCE_AVG)
-        // binarize
-        // ちょいセンシティブ。例えば0.995だとp108の先頭の…(縦)が無視される。
-        // ダメそうならパラメータ化して、ページごとに設定するなどする。
-        threshold(m4, m5, 0.997, 1.0, CV_THRESH_BINARY)
+        scan_page(i0, result)
 
-        //    namedWindow("m5")
-        //    imshow("m5", m5)
-        //    waitKey()
-
-        val m5_buf = m5.createBuffer[FloatBuffer]()
-
-        def find_px(buf: FloatBuffer, r : collection.immutable.Range, f: Float => Boolean): Option[Int] = {
-          for (i <- r) {
-            if (f(buf.get(i))) {
-              return Some(i)
-            }
-          }
-          None
-        }
-
-        val first_px = find_px(m5_buf, 0 until oh, _ < 1.0)
-        println("first_px: " + first_px)
-
-        val last_px = find_px(m5_buf, oh-1 to 0 by -1, _ < 1.0)
-        println("last_px: " + last_px)
-
-        val fpx = first_px.get
-        val lpx = last_px.get
-        val margin = 15
-        val h_border = 450
-        val BLACK = new Scalar(0, 0, 0, 0)
-        val BLUE = new Scalar(255, 0, 0, 0)
-        val GREEN = new Scalar(0, 255, 0, 0)
-        val RED = new Scalar(0, 0, 255, 0)
-        val YELLOW = new Scalar(0, 255, 255, 0)
-
-        putText(result, "first_px",new Point(0, fpx+10), FONT_HERSHEY_TRIPLEX, 2.0, BLUE, 2, CV_AA, false)
-        line(result, new Point(0, fpx), new Point(ow, fpx), BLUE, 2, CV_AA, 0)
-
-        putText(result, "h_border", new Point(0, h_border+10), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
-        line(result, new Point(0, h_border), new Point(ow, h_border), BLACK, 2, CV_AA, 0)
-
-        if (fpx > h_border) {
-          // Type A; The pages start with "第～篇 (The n-th Chapter)".
-          putText(result, "Type: A", new Point(0, 50), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
-
-          putText(result, "first_px+margin", new Point(0, fpx-margin+10), FONT_HERSHEY_TRIPLEX, 2.0, RED, 2, CV_AA, false)
-          line(result, new Point(0, fpx-margin), new Point(ow, fpx-margin), RED, 2, CV_AA, 0)
-
-          putText(result, "last_px", new Point(0, lpx+10), FONT_HERSHEY_TRIPLEX, 2.0, BLUE, 2, CV_AA, false)
-          line(result, new Point(0, lpx), new Point(ow, lpx), BLUE, 2, CV_AA, 0)
-
-          //再びスキャンを行い、末尾を見つける
-          val last_px2 = find_px(m5_buf, lpx-75 to 0 by -1, _ < 1.0)
-          val lpx2 = last_px2.get
-
-          putText(result, "last_px(adjusted)", new Point(0, lpx2+margin+10), FONT_HERSHEY_TRIPLEX, 2.0, GREEN, 2, CV_AA, false)
-          line(result, new Point(0, lpx2+margin), new Point(ow, lpx2+margin), GREEN, 2, CV_AA, 0)
-        } else {
-          // Type B; Normal pages.
-          putText(result, "Type: B", new Point(0, 50), FONT_HERSHEY_TRIPLEX, 2.0, BLACK, 2, CV_AA, false)
-
-          //再びスキャンを行い、先端を見つける
-          val first_px2 = find_px(m5_buf, fpx+80 until oh, _ < 1.0)
-          val fpx2 = first_px2.get
-
-          putText(result, "first_px(adjusted)", new Point(0, fpx2-margin+10), FONT_HERSHEY_TRIPLEX, 2.0, GREEN, 2, CV_AA, false)
-          line(result, new Point(0, fpx2-margin), new Point(ow, fpx2-margin), GREEN, 2, CV_AA, 0)
-
-          putText(result, "last_px", new Point(0, lpx+10), FONT_HERSHEY_TRIPLEX, 2.0, BLUE, 2, CV_AA, false)
-          line(result, new Point(0, lpx), new Point(ow, lpx), BLUE, 2, CV_AA, 0)
-
-          putText(result, "last_px+margin", new Point(0, lpx+margin+10), FONT_HERSHEY_TRIPLEX, 2.0, RED, 2, CV_AA, false)
-          line(result, new Point(0, lpx+margin), new Point(ow, lpx+margin), RED, 2, CV_AA, 0)
-        }
-
-        val i0 = m0.asIplImage()
         val i1, i2 = cvCreateImage(cvGetSize(i0), IPL_DEPTH_8U, 1)
         val storage = cvCreateMemStorage(0)
         cvCvtColor(i0, i1, CV_BGR2GRAY)
@@ -155,7 +174,7 @@ object Main {
         val items = new mutable.MutableList[Int]
 
         for ((p0, p1) <- segments) {
-          line(result, new Point(p0.x, p0.y), new Point(p1.x, p1.y), RED, 2, CV_AA, 0)
+          cvLine(result, cvPoint(p0.x, p0.y), cvPoint(p1.x, p1.y), RED, 2, CV_AA, 0)
 
           val x_margin = 5
           val top_height = 50
@@ -168,7 +187,7 @@ object Main {
           val top_y = y - top_height - top_margin
           val bottom_y = y + bottom_margin
 
-          if (x >= 0 && top_y >= 0 && width > 0 && bottom_y + bottom_height < oh) {
+          if (x >= 0 && top_y >= 0 && width > 0 && bottom_y + bottom_height < page_size.height) {
             val v0 = cvCreateImage(cvSize(width, 1), IPL_DEPTH_32F, 1)
             val v1 = cvCreateImage(cvSize(1, 1), IPL_DEPTH_32F, 1)
 
@@ -185,23 +204,27 @@ object Main {
             if (avg < 0.15) {
               if (items.isEmpty || y - items.last > min_item_height) {
                 items += y
-                line(result, new Point(0, y-item_split_margin), new Point(ow, y-item_split_margin), BLUE, 2, CV_AA, 0)
+                cvLine(result, cvPoint(0, y-item_split_margin), cvPoint(page_size.width, y-item_split_margin), BLUE, 2, CV_AA, 0)
               }
-              rectangle(result, new Rect(x, top_y, width, top_height), BLUE, 1, CV_AA, 0)
-              rectangle(result, new Rect(x, bottom_y, width, bottom_height), GREEN, 1, CV_AA, 0)
+              cvRectangle(result, cvPoint(x, top_y), cvPoint(x+width, top_y+top_height), BLUE, 1, CV_AA, 0)
+              cvRectangle(result, cvPoint(x, bottom_y), cvPoint(x+width, bottom_y+bottom_height), GREEN, 1, CV_AA, 0)
             }
           }
           cvResetImageROI(i2)
         }
 
-        val preview = new Mat()
-        resize(result, preview, new Size(), 0.25, 0.25, INTER_LINEAR)
+        // patch for o
+
+        // split
+
+        val preview =  cvCreateImage(cvSize(page_size.width / 4, page_size.height / 4), IPL_DEPTH_8U, 3)
+        cvResize(result, preview, INTER_LINEAR)
         println("preview: " + preview)
 
-        namedWindow("Preview")
-        imshow("Preview", preview)
-        resizeWindow("Preview", preview.arrayWidth(), preview.arrayHeight())
-        waitKey()
+        cvNamedWindow("Preview")
+        cvShowImage("Preview", preview)
+        cvResizeWindow("Preview", preview.arrayWidth(), preview.arrayHeight())
+        cvWaitKey()
       }
     }
   }
