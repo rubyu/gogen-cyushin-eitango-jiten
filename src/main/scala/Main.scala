@@ -10,7 +10,7 @@ import org.bytedeco.javacpp.opencv_imgproc._
 import org.bytedeco.javacpp.opencv_highgui._
 import org.bytedeco.javacpp.opencv_objdetect._
 
-import scala.collection.mutable
+import scala.collection.{mutable, immutable}
 
 object Main {
 
@@ -230,7 +230,7 @@ object Main {
 
         val (pageType, pageTop, pageBottom) = scan_page(i2, result)
         val detected_items = scan_items(i2, result)
-        val items = mutable.TreeSet.empty(Ordering.fromLessThan[Int](_ < _)) ++= detected_items
+        var items = immutable.TreeSet.empty(Ordering.fromLessThan[Int](_ < _)) ++ detected_items
 
         println("page type", pageType)
         println("page top", pageTop)
@@ -267,7 +267,7 @@ object Main {
                     if (items contains current_y) {
                       println(y, "already be contained to item list")
                     } else {
-                      items += current_y
+                      items = items + current_y
                       println("add", y)
                       println("item list", items)
                       refresh()
@@ -275,7 +275,7 @@ object Main {
                   case Some(last_y) =>
                     val a = Math.min(last_y, current_y)
                     val b = Math.max(last_y, current_y)
-                    items.filter(i => a < i && i > b)
+                    items = items.filter(i => i < a || b < i)
                     println("filter item list", a , b)
                     println("item list", items)
                     refresh()
@@ -288,8 +288,7 @@ object Main {
               case CV_EVENT_RBUTTONDOWN =>
                 //reset
                 println("CV_EVENT_RBUTTONDOWN", x, y)
-                items.clear()
-                items ++= detected_items
+                items = items.empty ++ detected_items
                 refresh()
               case _ => {}
             }
