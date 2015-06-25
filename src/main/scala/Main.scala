@@ -189,8 +189,9 @@ object Main {
           val x = Math.min(p0.x, p1.x) + x_margin
           val width = Math.abs(p0.x - p1.x) - x_margin * 2
           val y = Math.min(p0.y, p1.y)
-          val top_y = y - top_height - top_margin
-          val bottom_y = y + bottom_margin
+          val top_y = Math.min(p0.y, p1.y) - top_height - top_margin
+          val bottom_y = Math.max(p0.y, p1.y) + bottom_margin
+
 
           if (x >= 0 && top_y >= 0 && width > 0 && bottom_y + bottom_height < page_size.height) {
             val v0 = cvCreateImage(cvSize(width, 1), IPL_DEPTH_32F, 1)
