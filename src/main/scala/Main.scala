@@ -39,31 +39,26 @@ object Main {
   val page_cut_margin = 15
 
   def scan_page(i0: IplImage, result: IplImage): (PageType, Int, Int) = {
+
     println("i0:", i0)
 
     val page_size = cvGetSize(i0)
-    val i1 = cvCreateImage(page_size, IPL_DEPTH_32F, 3)
-    val i2 = cvCreateImage(page_size, IPL_DEPTH_32F, 1)
-    val i3 = cvCreateImage(page_size, IPL_DEPTH_8U, 1)
-    val i4 = cvCreateImage(cvSize(1, page_size.height), IPL_DEPTH_32F, 1)
-    val i5 = cvCreateImage(cvSize(1, page_size.height), IPL_DEPTH_32F, 1)
+    val i1 = cvCreateImage(page_size, IPL_DEPTH_8U, 1)
+    val i2 = cvCreateImage(cvSize(1, page_size.height), IPL_DEPTH_32F, 1)
+    val i3 = cvCreateImage(cvSize(1, page_size.height), IPL_DEPTH_32F, 1)
 
-    // up-sampling 8bit integer to 32bit floating-point
-    cvConvertScale(i0, i1, 1.0 / 255, 0)
-    // convert color to gray-scale
-    cvCvtColor(i1, i2, CV_BGR2GRAY)
     // binarize
-    cvThreshold(i2, i3, 0.9, 1.0, CV_THRESH_BINARY)
+    cvThreshold(i0, i1, 0.9, 1.0, CV_THRESH_BINARY)
     // calculate average value of rows
-    cvReduce(i3, i4, 1, CV_REDUCE_AVG)
+    cvReduce(i1, i2, 1, CV_REDUCE_AVG)
     // binarize
     // ちょいセンシティブ。例えば0.995だとp108の先頭の…(縦)が無視される。
     // ダメそうならパラメータ化して、ページごとに設定するなどする。
-    cvThreshold(i4, i5, 0.997, 1.0, CV_THRESH_BINARY)
+    cvThreshold(i2, i3, 0.997, 1.0, CV_THRESH_BINARY)
 
-    //    namedWindow("m5")
-    //    imshow("m5", m5)
-    //    waitKey()
+//    cvNamedWindow("i3")
+//    cvShowImage("i3", i3)
+//    cvWaitKey()
 
     class PixelFinder(buf: FloatBuffer) {
       def find(r : collection.immutable.Range, f: Float => Boolean): Option[Int] = {
@@ -75,7 +70,11 @@ object Main {
         None
       }
     }
-    val finder = new PixelFinder(i5.createBuffer[FloatBuffer]())
+    val finder = new PixelFinder(i3.createBuffer[FloatBuffer]())
+
+    cvReleaseImage(i1)
+    cvReleaseImage(i2)
+    cvReleaseImage(i3)
 
     val fpx = finder.find(0 until page_size.height, _ < 1.0).get
     println("fpx:", fpx)
@@ -153,16 +152,22 @@ object Main {
         val page_size = cvGetSize(i0)
         val result = cvCreateImage(page_size, IPL_DEPTH_8U, 3)
         cvCopy(i0, result)
+        val i1 = cvCreateImage(page_size, IPL_DEPTH_32F, 3)
+        val i2 = cvCreateImage(page_size, IPL_DEPTH_32F, 1)
+        // up-sampling 8bit integer to 32bit floating-point
+        cvConvertScale(i0, i1, 1.0 / 255, 0)
+        // convert color to gray-scale
+        cvCvtColor(i1, i2, CV_BGR2GRAY)
 
-        scan_page(i0, result)
+        scan_page(i2, result)
 
-        val i1, i2 = cvCreateImage(cvGetSize(i0), IPL_DEPTH_8U, 1)
+        val i3 = cvCreateImage(page_size, IPL_DEPTH_32F, 1)
+        val i4 = cvCreateImage(cvGetSize(i0), IPL_DEPTH_8U, 1)
         val storage = cvCreateMemStorage(0)
-        cvCvtColor(i0, i1, CV_BGR2GRAY)
-        cvSmooth(i1, i2, CV_GAUSSIAN, 9, 9, 0, 0)
-        cvCopy(i2, i1)
-        cvThreshold(i1, i2, 250, 255, CV_THRESH_BINARY_INV)
-        val lines = cvHoughLines2(i2, storage, CV_HOUGH_PROBABILISTIC, 0.025, CV_PI / 180, 1, 200, 4)
+        cvSmooth(i2, i3, CV_GAUSSIAN, 9, 9, 0, 0)
+        cvThreshold(i3, i4, 0.95, 255, CV_THRESH_BINARY_INV)
+
+        val lines = cvHoughLines2(i4, storage, CV_HOUGH_PROBABILISTIC, 0.025, CV_PI / 180, 1, 200, 4)
 
         val segments = (for (i <- 0 until lines.total) yield {
           val segment = cvGetSeqElem(lines, i)
@@ -191,13 +196,13 @@ object Main {
             val v0 = cvCreateImage(cvSize(width, 1), IPL_DEPTH_32F, 1)
             val v1 = cvCreateImage(cvSize(1, 1), IPL_DEPTH_32F, 1)
 
-            cvSetImageROI(i2, cvRect(x, top_y, width, top_height))
-            cvReduce(i2, v0, 0, CV_REDUCE_AVG)
+            cvSetImageROI(i4, cvRect(x, top_y, width, top_height))
+            cvReduce(i4, v0, 0, CV_REDUCE_AVG)
             cvReduce(v0, v1, 1, CV_REDUCE_AVG)
             val avg1 = v1.createBuffer[FloatBuffer]().get(0)
-            cvResetImageROI(i2)
-            cvSetImageROI(i2, cvRect(x, bottom_y, width, bottom_height))
-            cvReduce(i2, v0, 0, CV_REDUCE_AVG)
+            cvResetImageROI(i4)
+            cvSetImageROI(i4, cvRect(x, bottom_y, width, bottom_height))
+            cvReduce(i4, v0, 0, CV_REDUCE_AVG)
             cvReduce(v0, v1, 1, CV_REDUCE_AVG)
             val avg = (avg1 + v1.createBuffer[FloatBuffer]().get(0)) / 512
             println("p0:", p0, "p1:", p1, "avg:", avg)
@@ -209,15 +214,17 @@ object Main {
               cvRectangle(result, cvPoint(x, top_y), cvPoint(x+width, top_y+top_height), BLUE, 1, CV_AA, 0)
               cvRectangle(result, cvPoint(x, bottom_y), cvPoint(x+width, bottom_y+bottom_height), GREEN, 1, CV_AA, 0)
             }
+            cvReleaseImage(v0)
+            cvReleaseImage(v1)
           }
-          cvResetImageROI(i2)
+          cvResetImageROI(i4)
         }
 
         // patch for o
 
         // split
 
-        val preview =  cvCreateImage(cvSize(page_size.width / 4, page_size.height / 4), IPL_DEPTH_8U, 3)
+        val preview = cvCreateImage(cvSize(page_size.width / 4, page_size.height / 4), IPL_DEPTH_8U, 3)
         cvResize(result, preview, INTER_LINEAR)
         println("preview: " + preview)
 
@@ -225,6 +232,15 @@ object Main {
         cvShowImage("Preview", preview)
         cvResizeWindow("Preview", preview.arrayWidth(), preview.arrayHeight())
         cvWaitKey()
+
+        //cvReleaseImage(i0)
+        cvReleaseImage(i1)
+        cvReleaseImage(i2)
+        cvReleaseImage(i3)
+        cvReleaseImage(i4)
+        cvReleaseImage(result)
+        cvReleaseMemStorage(storage)
+        cvReleaseImage(preview)
       }
     }
   }
