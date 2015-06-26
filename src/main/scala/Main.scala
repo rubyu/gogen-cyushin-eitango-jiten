@@ -4,6 +4,7 @@ import java.nio.{FloatBuffer, ByteBuffer}
 import java.io._
 import javax.imageio.ImageIO
 import org.bytedeco.javacpp.Pointer
+import org.bytedeco.javacpp.indexer.UByteIndexer
 import org.bytedeco.javacv.{OpenCVFrameConverter, Java2DFrameConverter, CanvasFrame}
 import org.bytedeco.javacpp.opencv_core._
 import org.bytedeco.javacpp.opencv_imgproc._
@@ -17,6 +18,8 @@ object Main {
   trait PageType
   object PageTypeA extends PageType
   object PageTypeB extends PageType
+
+  val debugOn = false
 
   val BLACK = cvScalar(0, 0, 0, 0)
   val BLUE = cvScalar(255, 0, 0, 0)
@@ -75,48 +78,58 @@ object Main {
     val lpx = finder.find(page_size.height-1 to 0 by -1, _ < 1.0).get
     println("lpx:", lpx)
 
-//    cvPutText(debug, "first_px", cvPoint(0, fpx+10), FONT, BLUE)
-//    cvLine(debug, cvPoint(0, fpx), cvPoint(page_size.width, fpx), BLUE, 2, CV_AA, 0)
-//
-//    cvPutText(debug, "header_border", cvPoint(0, header_border+10), FONT, BLACK)
-//    cvLine(debug, cvPoint(0, header_border), cvPoint(page_size.width, header_border), BLACK, 2, CV_AA, 0)
+    if (debugOn) {
+      cvPutText(debug, "first_px", cvPoint(0, fpx+10), FONT, BLUE)
+      cvLine(debug, cvPoint(0, fpx), cvPoint(page_size.width, fpx), BLUE, 2, CV_AA, 0)
+
+      cvPutText(debug, "header_border", cvPoint(0, header_border+10), FONT, BLACK)
+      cvLine(debug, cvPoint(0, header_border), cvPoint(page_size.width, header_border), BLACK, 2, CV_AA, 0)
+    }
 
     if (fpx > header_border) {
       // Type A; The pages start with "第～篇 (The n-th Chapter)".
-//      cvPutText(debug, "Type: A", cvPoint(0, 50), FONT, BLACK)
+      if (debugOn) {
+        cvPutText(debug, "Type: A", cvPoint(0, 50), FONT, BLACK)
+      }
 
       val fpx2 = fpx - page_cut_margin
       //再びスキャンを行い、末尾を見つける
       val lpx2 = finder.find(lpx-75 to 0 by -1, _ < 1.0).get
       val lpx2_adjusted = lpx2 + page_cut_margin
 
-//      cvPutText(debug, "first_px+margin", cvPoint(0, fpx2+10), FONT, RED)
-//      cvLine(debug, cvPoint(0, fpx2), cvPoint(page_size.width, fpx2), RED, 2, CV_AA, 0)
-//
-//      cvPutText(debug, "last_px", cvPoint(0, lpx+10), FONT, BLUE)
-//      cvLine(debug, cvPoint(0, lpx), cvPoint(page_size.width, lpx), BLUE, 2, CV_AA, 0)
-//
-//      cvPutText(debug, "last_px(adjusted)", cvPoint(0, lpx2_adjusted+10), FONT, GREEN)
-//      cvLine(debug, cvPoint(0, lpx2_adjusted), cvPoint(page_size.width, lpx2_adjusted), GREEN, 2, CV_AA, 0)
+      if (debugOn) {
+        cvPutText(debug, "first_px+margin", cvPoint(0, fpx2 + 10), FONT, RED)
+        cvLine(debug, cvPoint(0, fpx2), cvPoint(page_size.width, fpx2), RED, 2, CV_AA, 0)
+
+        cvPutText(debug, "last_px", cvPoint(0, lpx + 10), FONT, BLUE)
+        cvLine(debug, cvPoint(0, lpx), cvPoint(page_size.width, lpx), BLUE, 2, CV_AA, 0)
+
+        cvPutText(debug, "last_px(adjusted)", cvPoint(0, lpx2_adjusted + 10), FONT, GREEN)
+        cvLine(debug, cvPoint(0, lpx2_adjusted), cvPoint(page_size.width, lpx2_adjusted), GREEN, 2, CV_AA, 0)
+      }
 
       (PageTypeA, fpx2, lpx2_adjusted)
     } else {
       // Type B; Normal pages.
-//      cvPutText(debug, "Type: B", cvPoint(0, 50), FONT, BLACK)
+      if (debugOn) {
+        cvPutText(debug, "Type: B", cvPoint(0, 50), FONT, BLACK)
+      }
 
       //再びスキャンを行い、先端を見つける
       val fpx2 = finder.find(fpx+80 until page_size.height, _ < 1.0).get
       val fpx2_adjusted = fpx2 - page_cut_margin
       val lpx2 = lpx + page_cut_margin
 
-//      cvPutText(debug, "first_px(adjusted)", cvPoint(0, fpx2_adjusted+10), FONT, GREEN)
-//      cvLine(debug, cvPoint(0, fpx2_adjusted), cvPoint(page_size.width, fpx2_adjusted), GREEN, 2, CV_AA, 0)
-//
-//      cvPutText(debug, "last_px", cvPoint(0, lpx+10), FONT, BLUE)
-//      cvLine(debug, cvPoint(0, lpx), cvPoint(page_size.width, lpx), BLUE, 2, CV_AA, 0)
-//
-//      cvPutText(debug, "last_px+margin", cvPoint(0, lpx2+10), FONT, RED)
-//      cvLine(debug, cvPoint(0, lpx2), cvPoint(page_size.width, lpx2), RED, 2, CV_AA, 0)
+      if (debugOn) {
+        cvPutText(debug, "first_px(adjusted)", cvPoint(0, fpx2_adjusted + 10), FONT, GREEN)
+        cvLine(debug, cvPoint(0, fpx2_adjusted), cvPoint(page_size.width, fpx2_adjusted), GREEN, 2, CV_AA, 0)
+
+        cvPutText(debug, "last_px", cvPoint(0, lpx + 10), FONT, BLUE)
+        cvLine(debug, cvPoint(0, lpx), cvPoint(page_size.width, lpx), BLUE, 2, CV_AA, 0)
+
+        cvPutText(debug, "last_px+margin", cvPoint(0, lpx2 + 10), FONT, RED)
+        cvLine(debug, cvPoint(0, lpx2), cvPoint(page_size.width, lpx2), RED, 2, CV_AA, 0)
+      }
 
       (PageTypeB, fpx2_adjusted, lpx2)
     }
@@ -127,15 +140,15 @@ object Main {
   // アイテムを切り出す際のマージン
   val item_split_margin = 15
   // 検出した線のx方向に取るマージン
-  val item_x_margin = 5
+  val item_x_margin = 10
   // 線の上部のスキャン領域の高さ
   val item_top_height = 50
   // 線の上部のスキャン領域のマージン
-  val item_top_y_margin = 5
+  val item_top_y_margin = 8
   // 線の下部のスキャン領域の高さ
-  val item_bottom_height = 15
+  val item_bottom_height = 12
   // 線の下部のスキャン領域のマージン
-  val item_bottom_y_margin = 5
+  val item_bottom_y_margin = 8
   
   def scan_items(i0: IplImage, debug: IplImage): List[Int] = {
     val page_size = cvGetSize(i0)
@@ -155,8 +168,9 @@ object Main {
     val items = new mutable.MutableList[Int]
 
     for ((p0, p1) <- segments) {
-//      cvLine(debug, cvPoint(p0.x, p0.y), cvPoint(p1.x, p1.y), RED, 2, CV_AA, 0)
-
+      if (debugOn) {
+        cvLine(debug, cvPoint(p0.x, p0.y), cvPoint(p1.x, p1.y), RED, 2, CV_AA, 0)
+      }
       val x = Math.min(p0.x, p1.x) + item_x_margin
       val width = Math.abs(p0.x - p1.x) - item_x_margin * 2
       val y = Math.min(p0.y, p1.y) - item_split_margin
@@ -177,13 +191,17 @@ object Main {
         cvReduce(v0, v1, 1, CV_REDUCE_AVG)
         val avg = (avg1 + v1.createBuffer[FloatBuffer]().get(0)) / 512
         println("p0:", p0, "p1:", p1, "avg:", avg)
-        if (avg < 0.15) {
+        if (avg < 0.05) {
           if (items.isEmpty || y - items.last > min_item_height) {
             items += y
-//            cvLine(debug, cvPoint(0, y-item_split_margin), cvPoint(page_size.width, y-item_split_margin), BLUE, 2, CV_AA, 0)
+            if (debugOn) {
+              cvLine(debug, cvPoint(0, y - item_split_margin), cvPoint(page_size.width, y - item_split_margin), BLUE, 2, CV_AA, 0)
+            }
           }
-//          cvRectangle(debug, cvPoint(x, top_y), cvPoint(x+width, top_y+item_top_height), BLUE, 1, CV_AA, 0)
-//          cvRectangle(debug, cvPoint(x, bottom_y), cvPoint(x+width, bottom_y+item_bottom_height), GREEN, 1, CV_AA, 0)
+          if (debugOn) {
+            cvRectangle(debug, cvPoint(x, top_y), cvPoint(x + width, top_y + item_top_height), BLUE, 1, CV_AA, 0)
+            cvRectangle(debug, cvPoint(x, bottom_y), cvPoint(x + width, bottom_y + item_bottom_height), GREEN, 1, CV_AA, 0)
+          }
         }
         cvReleaseImage(v0)
         cvReleaseImage(v1)
@@ -196,6 +214,21 @@ object Main {
 
     items.toList
   }
+
+  def cvGamma(src: IplImage, dst: IplImage, gamma: Double) {
+    val lut = cvCreateMat(1, 256, CV_8U)
+    val lut_indexer = lut.createIndexer[UByteIndexer]()
+    for (i <- 0 until 256) {
+      lut_indexer.put(i, (Math.pow(i.toDouble / 255, 1.0 / gamma) * 255).toInt)
+    }
+    cvLUT(src, dst, lut)
+    cvReleaseMat(lut)
+  }
+
+  val gamma_adjust = 1.6
+
+  val page_clip_A = 150
+  val page_clip_B = 200
 
   def main(args: Array[String]) {
 
@@ -210,137 +243,155 @@ object Main {
     var img_index = -1
     val csv = new PrintWriter("output/chapter01.csv")
 
-    new File(source_dir).listFiles.map {
-      case f if f.isDirectory => {}
-      case file => {
-        println("-" * 20)
-        println(file.getName)
-        val image = ImageIO.read(file)
-        val i0 = bufferedImageToIplImage(image)
-        val page_size = cvGetSize(i0)
-        val result = cvCreateImage(page_size, IPL_DEPTH_8U, 3)
-//        val debug = cvCreateImage(page_size, IPL_DEPTH_8U, 3)
-//        cvCopy(i0, debug)
-        val i1 = cvCreateImage(page_size, IPL_DEPTH_32F, 3)
-        val i2 = cvCreateImage(page_size, IPL_DEPTH_32F, 1)
-        // up-sampling 8bit integer to 32bit floating-point
-        cvConvertScale(i0, i1, 1.0 / 255, 0)
-        // convert color to gray-scale
-        cvCvtColor(i1, i2, CV_BGR2GRAY)
+    for ((file, i) <- new File(source_dir).listFiles.zipWithIndex if file.isFile) {
+      println("-" * 20)
+      println(file.getName)
+      val image = ImageIO.read(file)
+      val i0 = bufferedImageToIplImage(image)
+      val pageSize = cvGetSize(i0)
+      val result = cvCreateImage(pageSize, IPL_DEPTH_8U, 3)
+      val debug = cvCreateImage(pageSize, IPL_DEPTH_8U, 3)
+        cvCopy(i0, debug)
+      val i1 = cvCreateImage(pageSize, IPL_DEPTH_8U, 3)
+      val i2 = cvCreateImage(pageSize, IPL_DEPTH_32F, 3)
+      val i3 = cvCreateImage(pageSize, IPL_DEPTH_32F, 1)
+      // adjust gamma
+      cvGamma(i0, i1, 1.0 / gamma_adjust)
+      // up-sampling 8bit integer to 32bit floating-point
+      cvConvertScale(i1, i2, 1.0 / 255, 0)
+      // convert color to gray-scale
+      cvCvtColor(i2, i3, CV_BGR2GRAY)
 
-        val (pageType, pageTop, pageBottom) = scan_page(i2, result)
-        val detected_items = scan_items(i2, result)
-        var items = immutable.TreeSet.empty(Ordering.fromLessThan[Int](_ < _)) ++ detected_items
+      if (debugOn) {
+        cvCopy(i1, debug)
+      }
 
-        println("page type", pageType)
-        println("page top", pageTop)
-        println("page bottom", pageBottom)
-        println("item list", items)
+      val (pageLeft, pageRight) = if (i % 2 == 0) (page_clip_A, page_clip_B) else (page_clip_B, page_clip_A)
+      val pageWidth = pageSize.width - pageLeft -pageRight
+      println("page left", pageLeft)
+      println("page right", pageRight)
+      println("page width", pageWidth)
 
-        val title = "Preview"
-        val preview = cvCreateImage(cvSize(page_size.width / 4, page_size.height / 4), IPL_DEPTH_8U, 3)
+      val (pageType, pageTop, pageBottom) = scan_page(i3, debug)
+      val detectedItems = scan_items(i3, debug)
+      var items = immutable.TreeSet.empty(Ordering.fromLessThan[Int](_ < _)) ++ detectedItems
 
-        def refresh() {
-          cvCopy(i0, result)
-          cvPutText(result, "top", cvPoint(200, pageTop-10), FONT, GREEN)
-          cvLine(result, cvPoint(0, pageTop), cvPoint(page_size.width, pageTop), GREEN, 2, CV_AA, 0)
-          cvPutText(result, "bottom", cvPoint(200, pageBottom-10), FONT, GREEN)
-          cvLine(result, cvPoint(0, pageBottom), cvPoint(page_size.width, pageBottom), GREEN, 2, CV_AA, 0)
+      println("page type", pageType)
+      println("page top", pageTop)
+      println("page bottom", pageBottom)
+      println("item list", items)
 
-          for ((item, i) <- items.zipWithIndex) {
-            cvPutText(result, "[" + i + "]", cvPoint(10*i, item-10), FONT, BLUE)
-            cvLine(result, cvPoint(0, item), cvPoint(page_size.width, item), BLUE, 2, CV_AA, 0)
-          }
-          cvResize(result, preview, INTER_LINEAR)
-          cvShowImage(title, preview)
-          cvResizeWindow(title, preview.arrayWidth(), preview.arrayHeight())
+      val title = "Preview"
+      val preview = cvCreateImage(cvSize(pageSize.width / 4, pageSize.height / 4), IPL_DEPTH_8U, 3)
+
+      def refresh() {
+        cvCopy(if (debugOn) debug else i1, result)
+        cvPutText(result, "top", cvPoint(200, pageTop-10), FONT, GREEN)
+        cvLine(result, cvPoint(0, pageTop), cvPoint(pageSize.width, pageTop), GREEN, 2, CV_AA, 0)
+        cvPutText(result, "bottom", cvPoint(200, pageBottom-10), FONT, GREEN)
+        cvLine(result, cvPoint(0, pageBottom), cvPoint(pageSize.width, pageBottom), GREEN, 2, CV_AA, 0)
+
+        cvPutText(result, "left", cvPoint(pageLeft, 50), FONT, GREEN)
+        cvLine(result, cvPoint(pageLeft, 0), cvPoint(pageLeft, pageSize.height), GREEN, 2, CV_AA, 0)
+        cvPutText(result, "right", cvPoint(pageLeft + pageWidth - 200, 50), FONT, GREEN)
+        cvLine(result, cvPoint(pageLeft + pageWidth, 0), cvPoint(pageLeft + pageWidth, pageSize.height), GREEN, 2, CV_AA, 0)
+
+        for ((item, i) <- items.zipWithIndex) {
+          cvPutText(result, "[" + i + "]", cvPoint(10*i, item-10), FONT, BLUE)
+          cvLine(result, cvPoint(0, item), cvPoint(pageSize.width, item), BLUE, 2, CV_AA, 0)
         }
+        cvResize(result, preview, INTER_LINEAR)
+        cvShowImage(title, preview)
+        cvResizeWindow(title, preview.arrayWidth(), preview.arrayHeight())
+      }
 
-        val callback = new CvMouseCallback() {
-          var lastPos: Option[Int] = None
-          override def call(evt: Int, x: Int, y: Int, flags: Int, param: Pointer) {
-            val current_y = y * 4
-            evt match {
-              case CV_EVENT_LBUTTONUP =>
-                lastPos match {
-                  case Some(last_y) if last_y == current_y =>
-                    if (items contains current_y) {
-                      println(y, "already be contained to item list")
-                    } else {
-                      items = items + current_y
-                      println("add", y)
-                      println("item list", items)
-                      refresh()
-                    }
-                  case Some(last_y) =>
-                    val a = Math.min(last_y, current_y)
-                    val b = Math.max(last_y, current_y)
-                    items = items.filter(i => i < a || b < i)
-                    println("filter item list", a , b)
+      val callback = new CvMouseCallback() {
+        var lastPos: Option[Int] = None
+        override def call(evt: Int, x: Int, y: Int, flags: Int, param: Pointer) {
+          val current_y = y * 4
+          evt match {
+            case CV_EVENT_LBUTTONUP =>
+              lastPos match {
+                case Some(last_y) if last_y == current_y =>
+                  if (items contains current_y) {
+                    println(y, "already be contained to item list")
+                  } else {
+                    items = items + current_y
+                    println("add", y)
                     println("item list", items)
                     refresh()
-                  case None =>
-                }
-                println("CV_EVENT_LBUTTONUP", x, y)
-              case CV_EVENT_LBUTTONDOWN =>
-                println("CV_EVENT_LBUTTONDOWN", x, y)
-                lastPos = Some(y * 4)
-              case CV_EVENT_RBUTTONDOWN =>
-                //reset
-                println("CV_EVENT_RBUTTONDOWN", x, y)
-                items = items.empty ++ detected_items
-                refresh()
-              case _ => {}
-            }
+                  }
+                case Some(last_y) =>
+                  val a = Math.min(last_y, current_y)
+                  val b = Math.max(last_y, current_y)
+                  items = items.filter(i => i < a || b < i)
+                  println("filter item list", a , b)
+                  println("item list", items)
+                  refresh()
+                case None =>
+              }
+              println("CV_EVENT_LBUTTONUP", x, y)
+            case CV_EVENT_LBUTTONDOWN =>
+              println("CV_EVENT_LBUTTONDOWN", x, y)
+              lastPos = Some(y * 4)
+            case CV_EVENT_RBUTTONDOWN =>
+              //reset
+              println("CV_EVENT_RBUTTONDOWN", x, y)
+              items = items.empty ++ detectedItems
+              refresh()
+            case _ => {}
           }
         }
-        cvNamedWindow(title)
-        cvSetMouseCallback(title, callback)
-        refresh()
-        cvWaitKey()
-
-        // output item images
-        println("items", items)
-        def fileId = f"00-00-$item_index%04d-$img_index%02d"
-        def filename = s"output/$fileId.bmp"
-
-        // 見出しがある
-        if (pageType == PageTypeA) {
-          item_index += 1
-        }
-
-        if (items.isEmpty || pageTop < items.head) {
-          img_index += 1
-          val rect = cvRect(0, pageTop, page_size.width, items.headOption.getOrElse(pageBottom) - pageTop)
-          println("filename", filename)
-          println("rect", rect)
-          if (img_index > 0) {
-            csv.print(", ")
-          }
-          csv.print(fileId)
-          cvSetImageROI(i0, rect)
-          cvSaveImage(filename, i0)
-          cvResetImageROI(i0)
-        }
-
-        for ((a, b) <- items zip items.drop(1) + pageBottom) {
-          img_index = 0
-          item_index += 1
-          val rect = cvRect(0, a, page_size.width, b - a)
-          println("filename", filename)
-          println("rect", rect)
-          csv.println()
-          csv.print(fileId)
-          cvSetImageROI(i0, rect)
-          cvSaveImage(filename, i0)
-          cvResetImageROI(i0)
-        }
-        //cvReleaseImage(i0)
-        cvReleaseImage(i1)
-        cvReleaseImage(i2)
-        cvReleaseImage(result)
-        cvReleaseImage(preview)
       }
+      cvNamedWindow(title)
+      cvSetMouseCallback(title, callback)
+      refresh()
+      cvWaitKey()
+
+      // output item images
+      println("items", items)
+      def fileId = f"00-00-$item_index%04d-$img_index%02d"
+      def filename = s"output/$fileId.bmp"
+
+      // 見出しがある
+      if (pageType == PageTypeA) {
+        item_index += 1
+      }
+
+      if (items.isEmpty || pageTop < items.head) {
+        img_index += 1
+        val rect = cvRect(pageLeft, pageTop, pageWidth, items.headOption.getOrElse(pageBottom) - pageTop)
+        println("filename", filename)
+        println("rect", rect)
+        if (img_index > 0) {
+          csv.print(", ")
+        }
+        csv.print(fileId)
+        cvSetImageROI(i0, rect)
+        cvSaveImage(filename, i0)
+        cvResetImageROI(i0)
+      }
+
+      for ((a, b) <- items zip items.drop(1) + pageBottom) {
+        img_index = 0
+        item_index += 1
+        val rect = cvRect(pageLeft, a, pageWidth, b - a)
+        println("filename", filename)
+        println("rect", rect)
+        csv.println()
+        csv.print(fileId)
+        cvSetImageROI(i0, rect)
+        cvSaveImage(filename, i0)
+        cvResetImageROI(i0)
+      }
+
+      //cvReleaseImage(i0)
+      cvReleaseImage(i1)
+      cvReleaseImage(i2)
+      cvReleaseImage(i3)
+      cvReleaseImage(result)
+      cvReleaseImage(debug)
+      cvReleaseImage(preview)
     }
     csv.flush()
     csv.close()
