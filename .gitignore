@@ -1,5 +1,7 @@
 /project/
 /target/
+/output/
+/chapter*
 /.idea/
 /.idea_modules/
 /lib/imageio-ext-tiff-1.1.7.jar
