@@ -140,15 +140,15 @@ object Main {
   // アイテムを切り出す際のマージン
   val item_split_margin = 15
   // 検出した線のx方向に取るマージン
-  val item_x_margin = 10
+  val item_x_margin = 5
   // 線の上部のスキャン領域の高さ
   val item_top_height = 50
   // 線の上部のスキャン領域のマージン
-  val item_top_y_margin = 8
+  val item_top_y_margin = 5
   // 線の下部のスキャン領域の高さ
-  val item_bottom_height = 12
+  val item_bottom_height = 15
   // 線の下部のスキャン領域のマージン
-  val item_bottom_y_margin = 8
+  val item_bottom_y_margin = 5
   
   def scan_items(i0: IplImage, debug: IplImage): List[Int] = {
     val page_size = cvGetSize(i0)
@@ -191,7 +191,7 @@ object Main {
         cvReduce(v0, v1, 1, CV_REDUCE_AVG)
         val avg = (avg1 + v1.createBuffer[FloatBuffer]().get(0)) / 512
         println("p0:", p0, "p1:", p1, "avg:", avg)
-        if (avg < 0.05) {
+        if (avg < 0.15) {
           if (items.isEmpty || y - items.last > min_item_height) {
             items += y
             if (debugOn) {
@@ -246,24 +246,25 @@ object Main {
     for ((file, i) <- new File(source_dir).listFiles.zipWithIndex if file.isFile) {
       println("-" * 20)
       println(file.getName)
+
       val image = ImageIO.read(file)
       val i0 = bufferedImageToIplImage(image)
       val pageSize = cvGetSize(i0)
       val result = cvCreateImage(pageSize, IPL_DEPTH_8U, 3)
       val debug = cvCreateImage(pageSize, IPL_DEPTH_8U, 3)
-        cvCopy(i0, debug)
-      val i1 = cvCreateImage(pageSize, IPL_DEPTH_8U, 3)
-      val i2 = cvCreateImage(pageSize, IPL_DEPTH_32F, 3)
-      val i3 = cvCreateImage(pageSize, IPL_DEPTH_32F, 1)
-      // adjust gamma
-      cvGamma(i0, i1, 1.0 / gamma_adjust)
+      val i1 = cvCreateImage(pageSize, IPL_DEPTH_32F, 3)
+      val i2 = cvCreateImage(pageSize, IPL_DEPTH_32F, 1)
+      val i3 = cvCreateImage(pageSize, IPL_DEPTH_8U, 3)
+
       // up-sampling 8bit integer to 32bit floating-point
-      cvConvertScale(i1, i2, 1.0 / 255, 0)
+      cvConvertScale(i0, i1, 1.0 / 255, 0)
       // convert color to gray-scale
-      cvCvtColor(i2, i3, CV_BGR2GRAY)
+      cvCvtColor(i1, i2, CV_BGR2GRAY)
+      // adjust gamma
+      cvGamma(i0, i3, 1.0 / gamma_adjust)
 
       if (debugOn) {
-        cvCopy(i1, debug)
+        cvCopy(i0, debug)
       }
 
       val (pageLeft, pageRight) = if (i % 2 == 0) (page_clip_A, page_clip_B) else (page_clip_B, page_clip_A)
@@ -272,8 +273,8 @@ object Main {
       println("page right", pageRight)
       println("page width", pageWidth)
 
-      val (pageType, pageTop, pageBottom) = scan_page(i3, debug)
-      val detectedItems = scan_items(i3, debug)
+      val (pageType, pageTop, pageBottom) = scan_page(i2, debug)
+      val detectedItems = scan_items(i2, debug)
       var items = immutable.TreeSet.empty(Ordering.fromLessThan[Int](_ < _)) ++ detectedItems
 
       println("page type", pageType)
@@ -285,7 +286,7 @@ object Main {
       val preview = cvCreateImage(cvSize(pageSize.width / 4, pageSize.height / 4), IPL_DEPTH_8U, 3)
 
       def refresh() {
-        cvCopy(if (debugOn) debug else i1, result)
+        cvCopy(if (debugOn) debug else i3, result)
         cvPutText(result, "top", cvPoint(200, pageTop-10), FONT, GREEN)
         cvLine(result, cvPoint(0, pageTop), cvPoint(pageSize.width, pageTop), GREEN, 2, CV_AA, 0)
         cvPutText(result, "bottom", cvPoint(200, pageBottom-10), FONT, GREEN)
@@ -367,9 +368,9 @@ object Main {
           csv.print(", ")
         }
         csv.print(fileId)
-        cvSetImageROI(i0, rect)
-        cvSaveImage(filename, i0)
-        cvResetImageROI(i0)
+        cvSetImageROI(i3, rect)
+        cvSaveImage(filename, i3)
+        cvResetImageROI(i3)
       }
 
       for ((a, b) <- items zip items.drop(1) + pageBottom) {
@@ -380,9 +381,9 @@ object Main {
         println("rect", rect)
         csv.println()
         csv.print(fileId)
-        cvSetImageROI(i0, rect)
-        cvSaveImage(filename, i0)
-        cvResetImageROI(i0)
+        cvSetImageROI(i3, rect)
+        cvSaveImage(filename, i3)
+        cvResetImageROI(i3)
       }
 
       //cvReleaseImage(i0)
