@@ -20,6 +20,8 @@ object Main {
   object PageTypeB extends PageType
 
   val debugOn = false
+  val guiOn = false
+  val outputOn = false
 
   val BLACK = cvScalar(0, 0, 0, 0)
   val BLUE = cvScalar(255, 0, 0, 0)
@@ -282,108 +284,114 @@ object Main {
       println("page bottom", pageBottom)
       println("item list", items)
 
-      val title = "Preview"
-      val preview = cvCreateImage(cvSize(pageSize.width / 4, pageSize.height / 4), IPL_DEPTH_8U, 3)
+      if (guiOn) {
+        val title = "Preview"
+        val preview = cvCreateImage(cvSize(pageSize.width / 4, pageSize.height / 4), IPL_DEPTH_8U, 3)
 
-      def refresh() {
-        cvCopy(if (debugOn) debug else i3, result)
-        cvPutText(result, "top", cvPoint(200, pageTop-10), FONT, GREEN)
-        cvLine(result, cvPoint(0, pageTop), cvPoint(pageSize.width, pageTop), GREEN, 2, CV_AA, 0)
-        cvPutText(result, "bottom", cvPoint(200, pageBottom-10), FONT, GREEN)
-        cvLine(result, cvPoint(0, pageBottom), cvPoint(pageSize.width, pageBottom), GREEN, 2, CV_AA, 0)
+        def refresh() {
+          cvCopy(if (debugOn) debug else i3, result)
+          cvPutText(result, "top", cvPoint(200, pageTop-10), FONT, GREEN)
+          cvLine(result, cvPoint(0, pageTop), cvPoint(pageSize.width, pageTop), GREEN, 2, CV_AA, 0)
+          cvPutText(result, "bottom", cvPoint(200, pageBottom-10), FONT, GREEN)
+          cvLine(result, cvPoint(0, pageBottom), cvPoint(pageSize.width, pageBottom), GREEN, 2, CV_AA, 0)
 
-        cvPutText(result, "left", cvPoint(pageLeft, 50), FONT, GREEN)
-        cvLine(result, cvPoint(pageLeft, 0), cvPoint(pageLeft, pageSize.height), GREEN, 2, CV_AA, 0)
-        cvPutText(result, "right", cvPoint(pageLeft + pageWidth - 200, 50), FONT, GREEN)
-        cvLine(result, cvPoint(pageLeft + pageWidth, 0), cvPoint(pageLeft + pageWidth, pageSize.height), GREEN, 2, CV_AA, 0)
+          cvPutText(result, "left", cvPoint(pageLeft, 50), FONT, GREEN)
+          cvLine(result, cvPoint(pageLeft, 0), cvPoint(pageLeft, pageSize.height), GREEN, 2, CV_AA, 0)
+          cvPutText(result, "right", cvPoint(pageLeft + pageWidth - 200, 50), FONT, GREEN)
+          cvLine(result, cvPoint(pageLeft + pageWidth, 0), cvPoint(pageLeft + pageWidth, pageSize.height), GREEN, 2, CV_AA, 0)
 
-        for ((item, i) <- items.zipWithIndex) {
-          cvPutText(result, "[" + i + "]", cvPoint(10*i, item-10), FONT, BLUE)
-          cvLine(result, cvPoint(0, item), cvPoint(pageSize.width, item), BLUE, 2, CV_AA, 0)
+          for ((item, i) <- items.zipWithIndex) {
+            cvPutText(result, "[" + i + "]", cvPoint(10*i, item-10), FONT, BLUE)
+            cvLine(result, cvPoint(0, item), cvPoint(pageSize.width, item), BLUE, 2, CV_AA, 0)
+          }
+          cvResize(result, preview, INTER_LINEAR)
+          cvShowImage(title, preview)
+          cvResizeWindow(title, preview.arrayWidth(), preview.arrayHeight())
         }
-        cvResize(result, preview, INTER_LINEAR)
-        cvShowImage(title, preview)
-        cvResizeWindow(title, preview.arrayWidth(), preview.arrayHeight())
-      }
 
-      val callback = new CvMouseCallback() {
-        var lastPos: Option[Int] = None
-        override def call(evt: Int, x: Int, y: Int, flags: Int, param: Pointer) {
-          val current_y = y * 4
-          evt match {
-            case CV_EVENT_LBUTTONUP =>
-              lastPos match {
-                case Some(last_y) if last_y == current_y =>
-                  if (items contains current_y) {
-                    println(y, "already be contained to item list")
-                  } else {
-                    items = items + current_y
-                    println("add", y)
+        val callback = new CvMouseCallback() {
+          var lastPos: Option[Int] = None
+          override def call(evt: Int, x: Int, y: Int, flags: Int, param: Pointer) {
+            val current_y = y * 4
+            evt match {
+              case CV_EVENT_LBUTTONUP =>
+                lastPos match {
+                  case Some(last_y) if last_y == current_y =>
+                    if (items contains current_y) {
+                      println(y, "already be contained to item list")
+                    } else {
+                      items = items + current_y
+                      println("add", y)
+                      println("item list", items)
+                      refresh()
+                    }
+                  case Some(last_y) =>
+                    val a = Math.min(last_y, current_y)
+                    val b = Math.max(last_y, current_y)
+                    items = items.filter(i => i < a || b < i)
+                    println("filter item list", a , b)
                     println("item list", items)
                     refresh()
-                  }
-                case Some(last_y) =>
-                  val a = Math.min(last_y, current_y)
-                  val b = Math.max(last_y, current_y)
-                  items = items.filter(i => i < a || b < i)
-                  println("filter item list", a , b)
-                  println("item list", items)
-                  refresh()
-                case None =>
-              }
-              println("CV_EVENT_LBUTTONUP", x, y)
-            case CV_EVENT_LBUTTONDOWN =>
-              println("CV_EVENT_LBUTTONDOWN", x, y)
-              lastPos = Some(y * 4)
-            case CV_EVENT_RBUTTONDOWN =>
-              //reset
-              println("CV_EVENT_RBUTTONDOWN", x, y)
-              items = items.empty ++ detectedItems
-              refresh()
-            case _ => {}
+                  case None =>
+                }
+                println("CV_EVENT_LBUTTONUP", x, y)
+              case CV_EVENT_LBUTTONDOWN =>
+                println("CV_EVENT_LBUTTONDOWN", x, y)
+                lastPos = Some(y * 4)
+              case CV_EVENT_RBUTTONDOWN =>
+                //reset
+                println("CV_EVENT_RBUTTONDOWN", x, y)
+                items = items.empty ++ detectedItems
+                refresh()
+              case _ => {}
+            }
           }
         }
-      }
-      cvNamedWindow(title)
-      cvSetMouseCallback(title, callback)
-      refresh()
-      cvWaitKey()
+        cvNamedWindow(title)
+        cvSetMouseCallback(title, callback)
+        refresh()
+        cvWaitKey()
 
-      // output item images
-      println("items", items)
-      def fileId = f"00-00-$item_index%04d-$img_index%02d"
-      def filename = s"output/$fileId.bmp"
-
-      // 見出しがある
-      if (pageType == PageTypeA) {
-        item_index += 1
+        cvReleaseImage(preview)
       }
 
-      if (items.isEmpty || pageTop < items.head) {
-        img_index += 1
-        val rect = cvRect(pageLeft, pageTop, pageWidth, items.headOption.getOrElse(pageBottom) - pageTop)
-        println("filename", filename)
-        println("rect", rect)
-        if (img_index > 0) {
-          csv.print(", ")
+      if (outputOn) {
+        // output item images
+        println("items", items)
+        def fileId = f"00-00-$item_index%04d-$img_index%02d"
+        def filename = s"output/$fileId.bmp"
+
+        // 見出しがある
+        if (pageType == PageTypeA) {
+          item_index += 1
         }
-        csv.print(fileId)
-        cvSetImageROI(i3, rect)
-        cvSaveImage(filename, i3)
-        cvResetImageROI(i3)
-      }
 
-      for ((a, b) <- items zip items.drop(1) + pageBottom) {
-        img_index = 0
-        item_index += 1
-        val rect = cvRect(pageLeft, a, pageWidth, b - a)
-        println("filename", filename)
-        println("rect", rect)
-        csv.println()
-        csv.print(fileId)
-        cvSetImageROI(i3, rect)
-        cvSaveImage(filename, i3)
-        cvResetImageROI(i3)
+        if (items.isEmpty || pageTop < items.head) {
+          img_index += 1
+          val rect = cvRect(pageLeft, pageTop, pageWidth, items.headOption.getOrElse(pageBottom) - pageTop)
+          println("filename", filename)
+          println("rect", rect)
+          if (img_index > 0) {
+            csv.print(", ")
+          }
+          csv.print(fileId)
+          cvSetImageROI(i3, rect)
+          cvSaveImage(filename, i3)
+          cvResetImageROI(i3)
+        }
+
+        for ((a, b) <- items zip items.drop(1) + pageBottom) {
+          img_index = 0
+          item_index += 1
+          val rect = cvRect(pageLeft, a, pageWidth, b - a)
+          println("filename", filename)
+          println("rect", rect)
+          csv.println()
+          csv.print(fileId)
+          cvSetImageROI(i3, rect)
+          cvSaveImage(filename, i3)
+          cvResetImageROI(i3)
+        }
       }
 
       //cvReleaseImage(i0)
@@ -392,7 +400,6 @@ object Main {
       cvReleaseImage(i3)
       cvReleaseImage(result)
       cvReleaseImage(debug)
-      cvReleaseImage(preview)
     }
     csv.flush()
     csv.close()
