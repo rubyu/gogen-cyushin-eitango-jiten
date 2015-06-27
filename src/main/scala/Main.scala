@@ -193,7 +193,7 @@ object Main {
         cvReduce(v0, v1, 1, CV_REDUCE_AVG)
         val avg = (avg1 + v1.createBuffer[FloatBuffer]().get(0)) / 512
         println("p0:", p0, "p1:", p1, "avg:", avg)
-        if (avg < 0.01) {
+        if (avg < 0.05) {
           if (items.isEmpty || y - items.last > min_item_height) {
             items += y
             if (debugOn) {
@@ -239,7 +239,7 @@ object Main {
     println("W:", ImageIO.getWriterFormatNames().mkString(", "))
     println("")
 
-    val prefix = 1
+    val prefix = 0
     val sourceDir = f"C:\\!変換データ\\${prefix}%02d"
 //    val sourceDir = "data"
     var itemIndex = -1
