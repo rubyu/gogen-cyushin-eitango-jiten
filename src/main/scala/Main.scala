@@ -277,7 +277,9 @@ object Main {
       println("page right", pageRight)
       println("page width", pageWidth)
 
-      var (pageType, pageTop, pageBottom) = scan_page(i2, debug)
+      val (pageType, _pageTop, _pageBottom) = scan_page(i2, debug)
+      var pageTop = _pageTop
+      var pageBottom = _pageBottom
       val detectedItems = scan_items(i2, debug)
       var items = immutable.TreeSet.empty(Ordering.fromLessThan[Int](_ < _)) ++ detectedItems
 
@@ -356,6 +358,8 @@ object Main {
                 //reset
                 println("CV_EVENT_RBUTTONDOWN", x, y)
                 items = items.empty ++ detectedItems
+                pageTop = _pageTop
+                pageBottom = _pageBottom
                 refresh()
               case _ => {}
             }
