@@ -312,34 +312,46 @@ object Main {
         }
 
         val callback = new CvMouseCallback() {
-          var lastPos: Option[Int] = None
+          var lastPos: Option[(Int, Int)] = None
           override def call(evt: Int, x: Int, y: Int, flags: Int, param: Pointer) {
+            val current_x = x * 4
             val current_y = y * 4
             evt match {
               case CV_EVENT_LBUTTONUP =>
+                println("CV_EVENT_LBUTTONUP", x, y)
                 lastPos match {
-                  case Some(last_y) if last_y == current_y =>
-                    if (items contains current_y) {
-                      println(y, "already be contained to item list")
+                  case Some((last_x, last_y)) =>
+                    if (Math.abs(current_x - last_x) > Math.abs(current_y - last_y)) {
+                      if (current_x - last_x > 0) {
+                        pageBottom = current_y
+                        println("page bottom moved to", pageBottom)
+                      } else {
+                        pageTop = current_y
+                        println("page top moved to", pageTop)
+                      }
                     } else {
-                      items = items + current_y
-                      println("add", y)
-                      println("item list", items)
-                      refresh()
+                       if (last_y == current_y) {
+                         if (items contains current_y) {
+                           println(y, "already be contained to item list")
+                         } else {
+                           items = items + current_y
+                           println("add", y)
+                           println("item list", items)
+                         }
+                       } else {
+                         val a = Math.min(last_y, current_y)
+                         val b = Math.max(last_y, current_y)
+                         items = items.filter(i => i < a || b < i)
+                         println("filter item list", a , b)
+                         println("item list", items)
+                       }
                     }
-                  case Some(last_y) =>
-                    val a = Math.min(last_y, current_y)
-                    val b = Math.max(last_y, current_y)
-                    items = items.filter(i => i < a || b < i)
-                    println("filter item list", a , b)
-                    println("item list", items)
                     refresh()
                   case None =>
                 }
-                println("CV_EVENT_LBUTTONUP", x, y)
               case CV_EVENT_LBUTTONDOWN =>
                 println("CV_EVENT_LBUTTONDOWN", x, y)
-                lastPos = Some(y * 4)
+                lastPos = Some(x * 4, y * 4)
               case CV_EVENT_RBUTTONDOWN =>
                 //reset
                 println("CV_EVENT_RBUTTONDOWN", x, y)
