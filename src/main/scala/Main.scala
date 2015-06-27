@@ -20,8 +20,8 @@ object Main {
   object PageTypeB extends PageType
 
   val debugOn = false
-  val guiOn = false
-  val outputOn = false
+  val guiOn = true
+  val outputOn = true
 
   val BLACK = cvScalar(0, 0, 0, 0)
   val BLUE = cvScalar(255, 0, 0, 0)
@@ -142,15 +142,15 @@ object Main {
   // アイテムを切り出す際のマージン
   val item_split_margin = 15
   // 検出した線のx方向に取るマージン
-  val item_x_margin = 5
+  val item_x_margin = 15
   // 線の上部のスキャン領域の高さ
-  val item_top_height = 50
+  val item_top_height = 55
   // 線の上部のスキャン領域のマージン
-  val item_top_y_margin = 5
+  val item_top_y_margin = 7
   // 線の下部のスキャン領域の高さ
-  val item_bottom_height = 15
+  val item_bottom_height = 20
   // 線の下部のスキャン領域のマージン
-  val item_bottom_y_margin = 5
+  val item_bottom_y_margin = 7
   
   def scan_items(i0: IplImage, debug: IplImage): List[Int] = {
     val page_size = cvGetSize(i0)
@@ -193,7 +193,7 @@ object Main {
         cvReduce(v0, v1, 1, CV_REDUCE_AVG)
         val avg = (avg1 + v1.createBuffer[FloatBuffer]().get(0)) / 512
         println("p0:", p0, "p1:", p1, "avg:", avg)
-        if (avg < 0.15) {
+        if (avg < 0.01) {
           if (items.isEmpty || y - items.last > min_item_height) {
             items += y
             if (debugOn) {
@@ -239,13 +239,14 @@ object Main {
     println("W:", ImageIO.getWriterFormatNames().mkString(", "))
     println("")
 
-    val source_dir = "C:\\!変換データ\\01"
-//    val source_dir = "data"
-    var item_index = -1
-    var img_index = -1
-    val csv = new PrintWriter("output/chapter01.csv")
+    val prefix = 1
+    val sourceDir = f"C:\\!変換データ\\${prefix}%02d"
+//    val sourceDir = "data"
+    var itemIndex = -1
+    var imgIndex = -1
+    val csv = new PrintWriter(f"output/chapter${prefix + 1}%02d.csv")
 
-    for ((file, i) <- new File(source_dir).listFiles.zipWithIndex if file.isFile) {
+    for ((file, i) <- new File(sourceDir).listFiles.zipWithIndex if file.isFile) {
       println("-" * 20)
       println(file.getName)
 
@@ -269,13 +270,14 @@ object Main {
         cvCopy(i0, debug)
       }
 
-      val (pageLeft, pageRight) = if (i % 2 == 0) (page_clip_A, page_clip_B) else (page_clip_B, page_clip_A)
+      val (pageLeft, pageRight) = if (i % 2 == 0) (page_clip_A, page_clip_B) else (page_clip_B, page_clip_A) //chapter01, chapter02
+//      val (pageLeft, pageRight) = if (i % 2 != 0) (page_clip_A, page_clip_B) else (page_clip_B, page_clip_A) //chapter03
       val pageWidth = pageSize.width - pageLeft -pageRight
       println("page left", pageLeft)
       println("page right", pageRight)
       println("page width", pageWidth)
 
-      val (pageType, pageTop, pageBottom) = scan_page(i2, debug)
+      var (pageType, pageTop, pageBottom) = scan_page(i2, debug)
       val detectedItems = scan_items(i2, debug)
       var items = immutable.TreeSet.empty(Ordering.fromLessThan[Int](_ < _)) ++ detectedItems
 
@@ -358,20 +360,20 @@ object Main {
       if (outputOn) {
         // output item images
         println("items", items)
-        def fileId = f"00-00-$item_index%04d-$img_index%02d"
-        def filename = s"output/$fileId.bmp"
+        def fileId = f"${prefix}%02d-00-00-${itemIndex}%04d-${imgIndex}%02d"
+        def filename = s"output/${fileId}.bmp"
 
         // 見出しがある
         if (pageType == PageTypeA) {
-          item_index += 1
+          itemIndex += 1
         }
 
         if (items.isEmpty || pageTop < items.head) {
-          img_index += 1
+          imgIndex += 1
           val rect = cvRect(pageLeft, pageTop, pageWidth, items.headOption.getOrElse(pageBottom) - pageTop)
           println("filename", filename)
           println("rect", rect)
-          if (img_index > 0) {
+          if (imgIndex > 0) {
             csv.print(", ")
           }
           csv.print(fileId)
@@ -381,8 +383,8 @@ object Main {
         }
 
         for ((a, b) <- items zip items.drop(1) + pageBottom) {
-          img_index = 0
-          item_index += 1
+          imgIndex = 0
+          itemIndex += 1
           val rect = cvRect(pageLeft, a, pageWidth, b - a)
           println("filename", filename)
           println("rect", rect)
